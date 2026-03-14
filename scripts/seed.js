@@ -1,8 +1,13 @@
 // Seed script — run with: node scripts/seed.js
+const { loadEnvConfig } = require('@next/env');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://msaadakram786_db_user2:mongodb786@cluster0.poo3mql.mongodb.net/sim-finder?retryWrites=true&w=majority&appName=Cluster0';
+loadEnvConfig(process.cwd());
+
+const MONGO_URI = process.env.MONGODB_URI;
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').trim();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 // ── Schemas (inline so script is self-contained) ──
 const adminSchema = new mongoose.Schema({
@@ -16,6 +21,10 @@ const settingSchema = new mongoose.Schema({
 });
 
 async function seed() {
+  if (!MONGO_URI) {
+    throw new Error('Missing MONGODB_URI');
+  }
+
   await mongoose.connect(MONGO_URI);
   console.log('Connected to MongoDB');
 
@@ -23,11 +32,11 @@ async function seed() {
   const Setting = mongoose.models.Setting || mongoose.model('Setting', settingSchema);
 
   // Seed admin
-  const existing = await Admin.findOne({ username: 'admin' });
+  const existing = await Admin.findOne({ username: ADMIN_USERNAME });
   if (!existing) {
-    const hash = await bcrypt.hash('admin123', 12);
-    await Admin.create({ username: 'admin', password: hash });
-    console.log('✓ Admin user created (admin / admin123)');
+    const hash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+    await Admin.create({ username: ADMIN_USERNAME, password: hash });
+    console.log(`✓ Admin user created (${ADMIN_USERNAME} / [from ADMIN_PASSWORD])`);
   } else {
     console.log('• Admin user already exists');
   }

@@ -1,21 +1,30 @@
+const { loadEnvConfig } = require('@next/env');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const MONGO_URI = 'mongodb+srv://msaadakram786_db_user2:mongodb786@cluster0.poo3mql.mongodb.net/sim-finder?retryWrites=true&w=majority&appName=Cluster0';
+loadEnvConfig(process.cwd());
+
+const MONGO_URI = process.env.MONGODB_URI;
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').trim();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 async function run() {
+  if (!MONGO_URI) {
+    throw new Error('Missing MONGODB_URI');
+  }
+
   await mongoose.connect(MONGO_URI);
-  const admin = await mongoose.connection.db.collection('admins').findOne({ username: 'admin' });
+  const admin = await mongoose.connection.db.collection('admins').findOne({ username: ADMIN_USERNAME });
   console.log('Admin found:', !!admin);
   console.log('Password hash starts with:', admin?.password?.substring(0, 10));
-  const match = await bcrypt.compare('admin123', admin.password);
-  console.log('Password matches admin123:', match);
+  const match = admin ? await bcrypt.compare(ADMIN_PASSWORD, admin.password) : false;
+  console.log('Password matches ADMIN_PASSWORD:', match);
   
   if (!match) {
-    console.log('Resetting password to admin123...');
-    const hash = await bcrypt.hash('admin123', 12);
+    console.log('Resetting password to ADMIN_PASSWORD...');
+    const hash = await bcrypt.hash(ADMIN_PASSWORD, 12);
     await mongoose.connection.db.collection('admins').updateOne(
-      { username: 'admin' },
+      { username: ADMIN_USERNAME },
       { $set: { password: hash } }
     );
     console.log('Password reset done');
