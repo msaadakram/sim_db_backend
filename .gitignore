@@ -9,8 +9,10 @@ out/
 build/
 
 # local env files
+.env
 .env*.local
 .env.local
+!.env.example
 
 # logs
 npm-debug.log*
