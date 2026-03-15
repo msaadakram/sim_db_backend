@@ -128,6 +128,59 @@ function detectCompanyFromNumber(number) {
   return 'Unknown';
 }
 
+function firstNonEmptyField(records, field) {
+  if (!Array.isArray(records)) return '';
+  for (const r of records) {
+    const value = String(r?.[field] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function pickBackfillValue(field, entry, pool) {
+  const cnic = String(entry?.cnic || '').trim();
+  const number = String(entry?.number || '').trim();
+
+  // Strongest signal: same CNIC.
+  if (cnic) {
+    const fromSameCnic = pool.find((r) =>
+      String(r?.cnic || '').trim() === cnic &&
+      String(r?.[field] || '').trim()
+    );
+    if (fromSameCnic) return String(fromSameCnic[field] || '').trim();
+  }
+
+  // Next best: same number.
+  if (number) {
+    const fromSameNumber = pool.find((r) =>
+      String(r?.number || '').trim() === number &&
+      String(r?.[field] || '').trim()
+    );
+    if (fromSameNumber) return String(fromSameNumber[field] || '').trim();
+  }
+
+  // Fallback: first non-empty value from combined records.
+  return firstNonEmptyField(pool, field);
+}
+
+function enrichMissingIdentityFields(records, fallbackRecords = []) {
+  if (!Array.isArray(records) || records.length === 0) return records;
+
+  const combinedPool = [...records, ...(Array.isArray(fallbackRecords) ? fallbackRecords : [])];
+  const fields = ['name', 'cnic', 'address'];
+
+  return records.map((entry) => {
+    const next = { ...entry };
+    for (const field of fields) {
+      const current = String(next[field] || '').trim();
+      if (current) continue;
+      const fill = pickBackfillValue(field, next, combinedPool);
+      if (fill) next[field] = fill;
+    }
+    return next;
+  });
+}
+
 // ======================== API CALL FUNCTIONS ========================
 
 async function withRetry(fn, retries = 2, delayMs = 500) {
@@ -279,6 +332,7 @@ export async function search(query) {
   if (firstCnic) {
     const cnicResult = await queryWithFailover(firstCnic, 'cnic', enabledMap, priorityOrder);
     if (cnicResult && cnicResult.data && cnicResult.data.length > 0) {
+      const enrichedCnicData = enrichMissingIdentityFields(cnicResult.data, mobileResult.data);
       const payload = {
         success: true,
         source: mobileResult.source,
@@ -286,7 +340,7 @@ export async function search(query) {
         query,
         cnic: firstCnic,
         numberData: mobileResult.data,
-        data: cnicResult.data,
+        data: enrichedCnicData,
       };
       cache.set(cacheKey, payload);
       return payload;
