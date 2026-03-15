@@ -33,6 +33,7 @@ function normaliseApi1(data) {
     name: (r.nam || '').trim(),
     cnic: (r.cni || '').trim(),
     number: (r.nbr || '').trim(),
+    company: detectCompanyFromNumber(r.nbr || ''),
     address: (r.adr || '').trim(),
   }));
 }
@@ -53,10 +54,12 @@ function normaliseApi2(data) {
 
   const results = [];
   for (let i = 0; i < count; i++) {
+    const number = (data.numbers?.[i] || '').trim();
     const entry = {
       name: (data.names?.[i] || '').trim(),
       cnic: (data.cnics?.[i] || '').trim(),
-      number: (data.numbers?.[i] || '').trim(),
+      number,
+      company: detectCompanyFromNumber(number),
       address: (data.addresses?.[i] || '').trim(),
     };
     const hasRealData = entry.name || entry.cnic || entry.number;
@@ -85,6 +88,44 @@ function extractJson(data) {
     } catch (_) { /* fall through */ }
   }
   return data;
+}
+
+function toLocalMobile(number) {
+  const digits = String(number || '').replace(/\D/g, '');
+
+  // 03XXXXXXXXX
+  if (digits.length === 11 && digits.startsWith('03')) return digits;
+
+  // 3XXXXXXXXX -> 03XXXXXXXXX
+  if (digits.length === 10 && digits.startsWith('3')) return `0${digits}`;
+
+  // 92XXXXXXXXXX -> 03XXXXXXXXX
+  if (digits.length === 12 && digits.startsWith('92')) {
+    const local10 = digits.slice(2);
+    if (local10.length === 10 && local10.startsWith('3')) return `0${local10}`;
+  }
+
+  // 0092XXXXXXXXXX -> 03XXXXXXXXX
+  if (digits.length === 14 && digits.startsWith('0092')) {
+    const local10 = digits.slice(4);
+    if (local10.length === 10 && local10.startsWith('3')) return `0${local10}`;
+  }
+
+  return '';
+}
+
+function detectCompanyFromNumber(number) {
+  const local = toLocalMobile(number);
+  if (!local) return 'Unknown';
+
+  const prefix = local.slice(0, 4);
+
+  if (prefix.startsWith('030') || prefix.startsWith('032')) return 'Jazz (Including Warid)';
+  if (prefix.startsWith('031') || prefix.startsWith('037')) return 'Zong';
+  if (prefix.startsWith('033')) return 'Ufone';
+  if (prefix.startsWith('034')) return 'Telenor';
+
+  return 'Unknown';
 }
 
 // ======================== API CALL FUNCTIONS ========================
