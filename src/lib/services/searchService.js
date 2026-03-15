@@ -1,6 +1,7 @@
 import axios from 'axios';
 import NodeCache from 'node-cache';
 import Setting from '../models/Setting';
+import { enrichRecordsWithCityProvince } from './cityProvinceMatcher';
 
 const cache = new NodeCache({ stdTTL: parseInt(process.env.CACHE_TTL) || 300 });
 const TIMEOUT = parseInt(process.env.API_TIMEOUT) || 10000;
@@ -309,12 +310,13 @@ export async function search(query) {
   if (queryType === 'cnic') {
     const result = await queryWithFailover(query, 'cnic', enabledMap, priorityOrder);
     if (result) {
+      const enrichedData = enrichRecordsWithCityProvince(result.data);
       const payload = {
         success: true,
         source: result.source,
         searchType: 'cnic',
         query,
-        data: result.data,
+        data: enrichedData,
       };
       cache.set(cacheKey, payload);
       return payload;
@@ -326,6 +328,8 @@ export async function search(query) {
   const mobileResult = await queryWithFailover(query, 'mobile', enabledMap, priorityOrder);
   if (!mobileResult) return null;
 
+  const enrichedNumberData = enrichRecordsWithCityProvince(mobileResult.data);
+
   // Try CNIC enrichment
   const firstCnic = mobileResult.data.find((r) => r.cnic && r.cnic.length === 13)?.cnic;
 
@@ -333,14 +337,15 @@ export async function search(query) {
     const cnicResult = await queryWithFailover(firstCnic, 'cnic', enabledMap, priorityOrder);
     if (cnicResult && cnicResult.data && cnicResult.data.length > 0) {
       const enrichedCnicData = enrichMissingIdentityFields(cnicResult.data, mobileResult.data);
+      const enrichedCnicDataWithLocation = enrichRecordsWithCityProvince(enrichedCnicData);
       const payload = {
         success: true,
         source: mobileResult.source,
         searchType: 'mobile_to_cnic',
         query,
         cnic: firstCnic,
-        numberData: mobileResult.data,
-        data: enrichedCnicData,
+        numberData: enrichedNumberData,
+        data: enrichedCnicDataWithLocation,
       };
       cache.set(cacheKey, payload);
       return payload;
@@ -353,7 +358,7 @@ export async function search(query) {
     source: mobileResult.source,
     searchType: 'mobile',
     query,
-    data: mobileResult.data,
+    data: enrichedNumberData,
   };
   cache.set(cacheKey, payload);
   return payload;
