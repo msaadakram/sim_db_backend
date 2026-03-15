@@ -182,6 +182,63 @@ function enrichMissingIdentityFields(records, fallbackRecords = []) {
   });
 }
 
+function enrichMissingLocationFields(records, fallbackRecords = []) {
+  if (!Array.isArray(records) || records.length === 0) return records;
+
+  const combinedPool = [...records, ...(Array.isArray(fallbackRecords) ? fallbackRecords : [])];
+  const fields = ['city', 'province'];
+
+  return records.map((entry) => {
+    const next = { ...entry };
+
+    for (const field of fields) {
+      const current = String(next[field] || '').trim();
+      if (current) continue;
+
+      // If city already exists, prefer province from same city for consistency.
+      if (field === 'province' && String(next.city || '').trim()) {
+        const city = String(next.city || '').trim();
+        const sameCity = combinedPool.find((r) =>
+          String(r?.city || '').trim() === city && String(r?.province || '').trim()
+        );
+        if (sameCity) {
+          next.province = String(sameCity.province || '').trim();
+          continue;
+        }
+      }
+
+      const fill = pickBackfillValue(field, next, combinedPool);
+      if (fill) next[field] = fill;
+    }
+
+    return next;
+  });
+}
+
+function enrichPayloadLocationFields(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  const next = { ...payload };
+  const hasData = Array.isArray(next.data);
+  const hasNumberData = Array.isArray(next.numberData);
+
+  if (!hasData && !hasNumberData) return next;
+
+  const enrichedData = hasData
+    ? enrichMissingLocationFields(enrichRecordsWithCityProvince(next.data))
+    : [];
+  const enrichedNumberData = hasNumberData
+    ? enrichMissingLocationFields(enrichRecordsWithCityProvince(next.numberData))
+    : [];
+
+  const pool = [...enrichedData, ...enrichedNumberData];
+
+  if (hasData) next.data = enrichMissingLocationFields(enrichedData, pool);
+  if (hasNumberData) next.numberData = enrichMissingLocationFields(enrichedNumberData, pool);
+
+  return next;
+}
+
 // ======================== API CALL FUNCTIONS ========================
 
 async function withRetry(fn, retries = 2, delayMs = 500) {
@@ -302,7 +359,11 @@ export async function search(query) {
     const srcOk =
       (cached.source === 'api1' && enabledMap.api1) ||
       (cached.source === 'api2' && enabledMap.api2);
-    if (srcOk) return cached;
+    if (srcOk) {
+      const reEnrichedCached = enrichPayloadLocationFields(cached);
+      cache.set(cacheKey, reEnrichedCached);
+      return reEnrichedCached;
+    }
     cache.del(cacheKey);
   }
 
@@ -311,12 +372,13 @@ export async function search(query) {
     const result = await queryWithFailover(query, 'cnic', enabledMap, priorityOrder);
     if (result) {
       const enrichedData = enrichRecordsWithCityProvince(result.data);
+      const enrichedDataWithBackfill = enrichMissingLocationFields(enrichedData);
       const payload = {
         success: true,
         source: result.source,
         searchType: 'cnic',
         query,
-        data: enrichedData,
+        data: enrichedDataWithBackfill,
       };
       cache.set(cacheKey, payload);
       return payload;
@@ -329,6 +391,7 @@ export async function search(query) {
   if (!mobileResult) return null;
 
   const enrichedNumberData = enrichRecordsWithCityProvince(mobileResult.data);
+  const enrichedNumberDataWithBackfill = enrichMissingLocationFields(enrichedNumberData);
 
   // Try CNIC enrichment
   const firstCnic = mobileResult.data.find((r) => r.cnic && r.cnic.length === 13)?.cnic;
@@ -338,14 +401,17 @@ export async function search(query) {
     if (cnicResult && cnicResult.data && cnicResult.data.length > 0) {
       const enrichedCnicData = enrichMissingIdentityFields(cnicResult.data, mobileResult.data);
       const enrichedCnicDataWithLocation = enrichRecordsWithCityProvince(enrichedCnicData);
+      const locationPool = [...enrichedCnicDataWithLocation, ...enrichedNumberDataWithBackfill];
+      const finalNumberData = enrichMissingLocationFields(enrichedNumberDataWithBackfill, locationPool);
+      const finalData = enrichMissingLocationFields(enrichedCnicDataWithLocation, locationPool);
       const payload = {
         success: true,
         source: mobileResult.source,
         searchType: 'mobile_to_cnic',
         query,
         cnic: firstCnic,
-        numberData: enrichedNumberData,
-        data: enrichedCnicDataWithLocation,
+        numberData: finalNumberData,
+        data: finalData,
       };
       cache.set(cacheKey, payload);
       return payload;
@@ -358,7 +424,7 @@ export async function search(query) {
     source: mobileResult.source,
     searchType: 'mobile',
     query,
-    data: enrichedNumberData,
+    data: enrichedNumberDataWithBackfill,
   };
   cache.set(cacheKey, payload);
   return payload;
