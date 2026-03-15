@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 
 const DATA_PATH_CANDIDATES = [
-  '/tmp/pk_city_province.tsv',
   path.join(process.cwd(), 'data', 'pk_city_province.tsv'),
   path.join(process.cwd(), 'pk_city_province.tsv'),
+  '/tmp/pk_city_province.tsv',
 ];
 
 let cachedCityRows = null;
@@ -42,6 +42,7 @@ function parseCityProvinceTsv(raw) {
       city,
       province,
       normalizedCity,
+      cityMarkerMatcher: new RegExp(`(^| )CITY ${escapeRegExp(normalizedCity)}( |$)`),
       matcher: new RegExp(`(^| )${escapeRegExp(normalizedCity)}( |$)`),
     });
   }
@@ -52,7 +53,9 @@ function parseCityProvinceTsv(raw) {
 }
 
 function loadCityRows() {
-  if (cachedCityRows) return cachedCityRows;
+  if (Array.isArray(cachedCityRows) && cachedCityRows.length > 0) {
+    return cachedCityRows;
+  }
 
   for (const dataPath of DATA_PATH_CANDIDATES) {
     try {
@@ -68,8 +71,7 @@ function loadCityRows() {
     }
   }
 
-  cachedCityRows = [];
-  return cachedCityRows;
+  return [];
 }
 
 export function detectCityProvinceFromAddress(address) {
@@ -77,6 +79,17 @@ export function detectCityProvinceFromAddress(address) {
   if (!normalizedAddress) return null;
 
   const rows = loadCityRows();
+
+  // Strongest signal: explicit "CITY <CITY_NAME>" phrase in address text.
+  for (const row of rows) {
+    if (row.cityMarkerMatcher.test(normalizedAddress)) {
+      return {
+        city: row.city,
+        province: row.province,
+      };
+    }
+  }
+
   for (const row of rows) {
     if (row.matcher.test(normalizedAddress)) {
       return {
