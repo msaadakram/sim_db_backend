@@ -25,6 +25,7 @@ Admin panel source for SIM Finder backend.
 	- `API2_URL`
 	- `API_TIMEOUT`
 	- `CACHE_TTL`
+	- `CORS_ALLOWED_ORIGINS` (comma-separated; e.g. `http://localhost:5050`)
 4. Deploy.
 
 The project includes `vercel.json` with Next.js build/install commands.
