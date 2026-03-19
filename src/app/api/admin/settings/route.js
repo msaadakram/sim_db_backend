@@ -5,6 +5,27 @@ import { requireAuth } from '@/lib/auth';
 import { flushCache } from '@/lib/services/searchService';
 
 const KNOWN_APIS = ['api1', 'api2'];
+const SHORTLINK_PROVIDERS = ['cuty', 'exe', 'gplinks', 'shrinkearn'];
+
+const SETTINGS_DEFAULTS = {
+  api1Enabled: true,
+  api2Enabled: true,
+  api1Url: process.env.API1_URL || '',
+  api2Url: process.env.API2_URL || '',
+  apiKeyRequired: false,
+  apiPriority: ['api1', 'api2'],
+  websiteGateEnabled: true,
+  websiteGateFreeQueries: 3,
+  websiteGateProviderRotation: ['cuty', 'exe', 'gplinks', 'shrinkearn'],
+  websiteGateProviderEnabled: {
+    cuty: true,
+    exe: true,
+    gplinks: true,
+    shrinkearn: true,
+  },
+  websiteGateFailoverEnabled: true,
+  websiteGateUnlockTtlMinutes: 10,
+};
 
 function normalizePriority(raw) {
   // Legacy string support from old backend
@@ -24,6 +45,72 @@ function normalizePriority(raw) {
   return ['api1', 'api2'];
 }
 
+function normalizeProviderRotation(raw) {
+  if (!Array.isArray(raw)) return [...SETTINGS_DEFAULTS.websiteGateProviderRotation];
+
+  const seen = new Set();
+  const cleaned = raw
+    .map((v) => String(v || '').trim().toLowerCase())
+    .filter((v) => SHORTLINK_PROVIDERS.includes(v) && !seen.has(v) && seen.add(v));
+
+  const missing = SHORTLINK_PROVIDERS.filter((p) => !cleaned.includes(p));
+  return [...cleaned, ...missing];
+}
+
+function normalizeProviderEnabled(raw) {
+  const base = { ...SETTINGS_DEFAULTS.websiteGateProviderEnabled };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
+
+  for (const provider of SHORTLINK_PROVIDERS) {
+    if (raw[provider] !== undefined) {
+      base[provider] = Boolean(raw[provider]);
+    }
+  }
+
+  return base;
+}
+
+function normalizeNonNegativeInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function normalizeWebsiteSetting(key, value) {
+  switch (key) {
+    case 'websiteGateEnabled':
+    case 'websiteGateFailoverEnabled':
+      return Boolean(value);
+    case 'websiteGateFreeQueries':
+      return normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateFreeQueries);
+    case 'websiteGateUnlockTtlMinutes':
+      return Math.max(1, normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateUnlockTtlMinutes));
+    case 'websiteGateProviderRotation':
+      return normalizeProviderRotation(value);
+    case 'websiteGateProviderEnabled':
+      return normalizeProviderEnabled(value);
+    default:
+      return value;
+  }
+}
+
+function normalizeByKey(key, value) {
+  if (key === 'apiPriority') return normalizePriority(value);
+  if (
+    key === 'websiteGateEnabled' ||
+    key === 'websiteGateFreeQueries' ||
+    key === 'websiteGateProviderRotation' ||
+    key === 'websiteGateProviderEnabled' ||
+    key === 'websiteGateFailoverEnabled' ||
+    key === 'websiteGateUnlockTtlMinutes'
+  ) {
+    return normalizeWebsiteSetting(key, value);
+  }
+  return value;
+}
+
+const SETTINGS_KEYS = Object.keys(SETTINGS_DEFAULTS);
+
 // GET /api/admin/settings
 export async function GET(request) {
   const auth = await requireAuth(request);
@@ -31,24 +118,18 @@ export async function GET(request) {
 
   try {
     await dbConnect();
-    const keys = ['api1Enabled', 'api2Enabled', 'api1Url', 'api2Url', 'apiKeyRequired', 'apiPriority'];
+    const keys = SETTINGS_KEYS;
     const settings = {};
     for (const key of keys) {
       const val = await Setting.get(key);
-      settings[key] = val;
-    }
-    if (settings.api1Enabled === null) settings.api1Enabled = true;
-    if (settings.api2Enabled === null) settings.api2Enabled = true;
-    if (settings.api1Url === null) settings.api1Url = process.env.API1_URL;
-    if (settings.api2Url === null) settings.api2Url = process.env.API2_URL;
-    if (settings.apiKeyRequired === null) settings.apiKeyRequired = false;
-    const normalizedPriority = normalizePriority(settings.apiPriority);
-    settings.apiPriority = normalizedPriority;
+      const fallback = SETTINGS_DEFAULTS[key];
+      const candidate = val === null ? fallback : val;
+      const normalized = normalizeByKey(key, candidate);
+      settings[key] = normalized;
 
-    // Self-heal invalid/legacy stored priority values
-    const existingPriority = await Setting.get('apiPriority');
-    if (JSON.stringify(existingPriority) !== JSON.stringify(normalizedPriority)) {
-      await Setting.set('apiPriority', normalizedPriority);
+      if (val === null || JSON.stringify(val) !== JSON.stringify(normalized)) {
+        await Setting.set(key, normalized);
+      }
     }
 
     return NextResponse.json(settings);
@@ -65,14 +146,10 @@ export async function PUT(request) {
   try {
     await dbConnect();
     const body = await request.json();
-    const allowed = ['api1Enabled', 'api2Enabled', 'api1Url', 'api2Url', 'apiKeyRequired', 'apiPriority'];
+    const allowed = SETTINGS_KEYS;
     for (const key of allowed) {
       if (body[key] !== undefined) {
-        if (key === 'apiPriority') {
-          await Setting.set(key, normalizePriority(body[key]));
-        } else {
-          await Setting.set(key, body[key]);
-        }
+        await Setting.set(key, normalizeByKey(key, body[key]));
       }
     }
     flushCache();

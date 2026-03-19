@@ -10,6 +10,13 @@ const API_REGISTRY = {
   api2: { label: 'API 2', domain: 'findpakjobs.pk', Icon: FiShield, color: 'api2', enabledKey: 'api2Enabled', urlKey: 'api2Url' },
 };
 
+const WEBSITE_PROVIDER_REGISTRY = {
+  cuty: { label: 'Cuty', domain: 'cuty.io' },
+  exe: { label: 'Exe', domain: 'exe.io' },
+  gplinks: { label: 'GPLinks', domain: 'gplinks.com' },
+  shrinkearn: { label: 'ShrinkEarn', domain: 'shrinkearn.com' },
+};
+
 export default function ApiSettings() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,11 +24,26 @@ export default function ApiSettings() {
   const [health, setHealth] = useState({});
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [togglingKey, setTogglingKey] = useState(null);
+  const [savingGate, setSavingGate] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
       const { data } = await api.get('/api/admin/settings');
-      setSettings(data);
+      setSettings({
+        ...data,
+        websiteGateEnabled: data.websiteGateEnabled ?? true,
+        websiteGateFreeQueries: data.websiteGateFreeQueries ?? 3,
+        websiteGateFailoverEnabled: data.websiteGateFailoverEnabled ?? true,
+        websiteGateUnlockTtlMinutes: data.websiteGateUnlockTtlMinutes ?? 10,
+        websiteGateProviderRotation: data.websiteGateProviderRotation || Object.keys(WEBSITE_PROVIDER_REGISTRY),
+        websiteGateProviderEnabled: {
+          cuty: true,
+          exe: true,
+          gplinks: true,
+          shrinkearn: true,
+          ...(data.websiteGateProviderEnabled || {}),
+        },
+      });
     } catch {
       toast.error('Failed to load settings');
     } finally {
@@ -101,6 +123,59 @@ export default function ApiSettings() {
     } catch {
       setSettings((s) => ({ ...s, apiPriority: prev }));
       toast.error('Failed to update priority');
+    }
+  };
+
+  const websiteProviderOrder = settings?.websiteGateProviderRotation || Object.keys(WEBSITE_PROVIDER_REGISTRY);
+
+  const moveWebsiteProvider = async (index, direction) => {
+    const newOrder = [...websiteProviderOrder];
+    const swapIdx = index + direction;
+    if (swapIdx < 0 || swapIdx >= newOrder.length) return;
+
+    [newOrder[index], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[index]];
+    const prev = settings.websiteGateProviderRotation;
+    setSettings((s) => ({ ...s, websiteGateProviderRotation: newOrder }));
+
+    try {
+      await api.patch('/api/admin/settings/websiteGateProviderRotation', { value: newOrder });
+      toast.success(`Website gate provider order updated: ${newOrder.map((k) => WEBSITE_PROVIDER_REGISTRY[k]?.label || k).join(' → ')}`);
+    } catch {
+      setSettings((s) => ({ ...s, websiteGateProviderRotation: prev }));
+      toast.error('Failed to update provider order');
+    }
+  };
+
+  const toggleWebsiteProvider = async (provider) => {
+    const prev = settings.websiteGateProviderEnabled || {};
+    const next = { ...prev, [provider]: !prev[provider] };
+    setSettings((s) => ({ ...s, websiteGateProviderEnabled: next }));
+    setTogglingKey(`provider-${provider}`);
+    try {
+      await api.patch('/api/admin/settings/websiteGateProviderEnabled', { value: next });
+      toast.success(`${WEBSITE_PROVIDER_REGISTRY[provider]?.label || provider} ${next[provider] ? 'enabled' : 'disabled'} for website gate`);
+    } catch {
+      setSettings((s) => ({ ...s, websiteGateProviderEnabled: prev }));
+      toast.error('Failed to update provider state');
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  const saveWebsiteGateConfig = async () => {
+    setSavingGate(true);
+    try {
+      await api.put('/api/admin/settings', {
+        websiteGateEnabled: Boolean(settings.websiteGateEnabled),
+        websiteGateFreeQueries: Number.parseInt(String(settings.websiteGateFreeQueries || 0), 10),
+        websiteGateFailoverEnabled: Boolean(settings.websiteGateFailoverEnabled),
+        websiteGateUnlockTtlMinutes: Number.parseInt(String(settings.websiteGateUnlockTtlMinutes || 10), 10),
+      });
+      toast.success('Website gate settings saved');
+    } catch {
+      toast.error('Failed to save website gate settings');
+    } finally {
+      setSavingGate(false);
     }
   };
 
@@ -207,6 +282,120 @@ export default function ApiSettings() {
               </React.Fragment>
             );
           })}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '1rem' }}>
+        <div className="card-header">
+          <h3><FiServer size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} />Website Short-link Gate</h3>
+        </div>
+
+        <div className="api-cards-grid" style={{ marginTop: '0.75rem' }}>
+          <div className={`api-control-card ${settings.websiteGateEnabled ? 'enabled' : 'disabled'}`}>
+            <div className="api-card-header">
+              <div className="api-card-icon security"><FiGlobe size={22} /></div>
+              <div className="api-card-title">
+                <h3>Website Gate Enabled</h3>
+                <span className="api-card-domain">Controls short-link requirement after free searches</span>
+              </div>
+            </div>
+            <div className="api-card-footer">
+              <span className="api-card-toggle-label">{settings.websiteGateEnabled ? 'Enabled' : 'Disabled'}</span>
+              <label className="toggle">
+                <input type="checkbox" checked={Boolean(settings.websiteGateEnabled)} onChange={() => setSettings((s) => ({ ...s, websiteGateEnabled: !s.websiteGateEnabled }))} />
+                <span className="slider" />
+              </label>
+            </div>
+          </div>
+
+          <div className={`api-control-card ${settings.websiteGateFailoverEnabled ? 'enabled' : 'disabled'}`}>
+            <div className="api-card-header">
+              <div className="api-card-icon api2"><FiRefreshCw size={22} /></div>
+              <div className="api-card-title">
+                <h3>Provider Failover</h3>
+                <span className="api-card-domain">Auto-tries next provider when one fails</span>
+              </div>
+            </div>
+            <div className="api-card-footer">
+              <span className="api-card-toggle-label">{settings.websiteGateFailoverEnabled ? 'Enabled' : 'Disabled'}</span>
+              <label className="toggle">
+                <input type="checkbox" checked={Boolean(settings.websiteGateFailoverEnabled)} onChange={() => setSettings((s) => ({ ...s, websiteGateFailoverEnabled: !s.websiteGateFailoverEnabled }))} />
+                <span className="slider" />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="url-field" style={{ marginTop: '1rem' }}>
+          <label>Free website searches before short-link gate</label>
+          <input
+            className="url-input"
+            type="number"
+            min="0"
+            value={settings.websiteGateFreeQueries ?? 3}
+            onChange={(e) => setSettings((s) => ({ ...s, websiteGateFreeQueries: e.target.value }))}
+          />
+        </div>
+
+        <div className="url-field" style={{ marginTop: '1rem' }}>
+          <label>Unlock token TTL (minutes)</label>
+          <input
+            className="url-input"
+            type="number"
+            min="1"
+            value={settings.websiteGateUnlockTtlMinutes ?? 10}
+            onChange={(e) => setSettings((s) => ({ ...s, websiteGateUnlockTtlMinutes: e.target.value }))}
+          />
+        </div>
+
+        <div className="priority-card" style={{ marginTop: '1rem' }}>
+          <div className="priority-header">
+            <h3><FiArrowUp size={16} style={{ marginRight: 6 }} />Short-link Provider Priority</h3>
+            <span className="priority-desc">Top provider is used first after free searches; if failover is on, the next providers are tried in order.</span>
+          </div>
+          <div className="priority-list">
+            {websiteProviderOrder.map((provider, idx) => {
+              const meta = WEBSITE_PROVIDER_REGISTRY[provider];
+              const enabled = Boolean(settings.websiteGateProviderEnabled?.[provider]);
+              const isFirst = idx === 0;
+              const isLast = idx === websiteProviderOrder.length - 1;
+              return (
+                <div className="priority-list-item" key={provider}>
+                  <span className="priority-rank">{idx + 1}</span>
+                  <div className="prio-info">
+                    <span className="prio-name">{meta?.label || provider}</span>
+                    <span className="prio-sub">{meta?.domain || provider}</span>
+                  </div>
+                  <span className={`status-dot ${enabled ? 'active' : 'inactive'}`}>
+                    <span className="dot" />{enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <div className="priority-arrows">
+                    <button className="arrow-btn" disabled={isFirst} onClick={() => moveWebsiteProvider(idx, -1)} title="Move up">
+                      <FiArrowUp size={14} />
+                    </button>
+                    <button className="arrow-btn" disabled={isLast} onClick={() => moveWebsiteProvider(idx, 1)} title="Move down">
+                      <FiArrowDown size={14} />
+                    </button>
+                  </div>
+                  <label className={`toggle ${togglingKey === `provider-${provider}` ? 'saving' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={() => toggleWebsiteProvider(provider)}
+                      disabled={togglingKey === `provider-${provider}`}
+                    />
+                    <span className="slider" />
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ marginTop: '1.25rem' }}>
+          <button className="btn btn-primary" style={{ maxWidth: 280 }} onClick={saveWebsiteGateConfig} disabled={savingGate}>
+            <FiSave size={16} /> {savingGate ? 'Saving gate config...' : 'Save Website Gate Settings'}
+          </button>
         </div>
       </div>
 
