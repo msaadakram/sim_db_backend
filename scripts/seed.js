@@ -2,10 +2,11 @@
 const { loadEnvConfig } = require('@next/env');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { withMongoDbName, getTargetDbName } = require('./db-uri');
 
 loadEnvConfig(process.cwd());
 
-const MONGO_URI = process.env.MONGODB_URI;
+const SOURCE_URI = process.env.MONGODB_URI;
 const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').trim();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
@@ -21,12 +22,14 @@ const settingSchema = new mongoose.Schema({
 });
 
 async function seed() {
-  if (!MONGO_URI) {
+  if (!SOURCE_URI) {
     throw new Error('Missing MONGODB_URI');
   }
 
+  const MONGO_URI = withMongoDbName(SOURCE_URI);
+
   await mongoose.connect(MONGO_URI);
-  console.log('Connected to MongoDB');
+  console.log(`Connected to MongoDB database: ${getTargetDbName()}`);
 
   const Admin = mongoose.models.Admin || mongoose.model('Admin', adminSchema);
   const Setting = mongoose.models.Setting || mongoose.model('Setting', settingSchema);

@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-
-const MONGODB_URI = process.env.MONGODB_URI;
+import { withMongoDbName } from './mongoUri';
 
 /**
  * Global cache for the mongoose connection to avoid
@@ -13,9 +12,12 @@ if (!cached) {
 }
 
 export default async function dbConnect() {
-  if (!MONGODB_URI) {
+  const sourceUri = process.env.MONGODB_URI;
+  if (!sourceUri) {
     throw new Error('Please define the MONGODB_URI environment variable in .env.local');
   }
+
+  const MONGODB_URI = withMongoDbName(sourceUri);
 
   if (cached.conn) {
     return cached.conn;

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start -p 3001",
     "seed": "node scripts/seed.js",
+    "migrate:active-db": "node scripts/migrate-active-db.js",
     "check-admin": "node scripts/check-admin.js",
     "reset-admin": "node scripts/reset-admin.js"
   },
