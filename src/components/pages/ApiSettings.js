@@ -25,6 +25,8 @@ export default function ApiSettings() {
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [togglingKey, setTogglingKey] = useState(null);
   const [savingGate, setSavingGate] = useState(false);
+  const [gateHealth, setGateHealth] = useState(null);
+  const [checkingGateHealth, setCheckingGateHealth] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -35,6 +37,8 @@ export default function ApiSettings() {
         websiteGateFreeQueries: data.websiteGateFreeQueries ?? 3,
         websiteGateFailoverEnabled: data.websiteGateFailoverEnabled ?? true,
         websiteGateUnlockTtlMinutes: data.websiteGateUnlockTtlMinutes ?? 10,
+        websiteGateResetWindowMinutes: data.websiteGateResetWindowMinutes ?? 1440,
+        websiteGateProbeUrl: data.websiteGateProbeUrl ?? 'https://sim-db-frontend.vercel.app',
         websiteGateProviderRotation: data.websiteGateProviderRotation || Object.keys(WEBSITE_PROVIDER_REGISTRY),
         websiteGateProviderEnabled: {
           cuty: true,
@@ -170,12 +174,33 @@ export default function ApiSettings() {
         websiteGateFreeQueries: Number.parseInt(String(settings.websiteGateFreeQueries || 0), 10),
         websiteGateFailoverEnabled: Boolean(settings.websiteGateFailoverEnabled),
         websiteGateUnlockTtlMinutes: Number.parseInt(String(settings.websiteGateUnlockTtlMinutes || 10), 10),
+        websiteGateResetWindowMinutes: Number.parseInt(String(settings.websiteGateResetWindowMinutes || 1440), 10),
+        websiteGateProbeUrl: String(settings.websiteGateProbeUrl || '').trim(),
       });
       toast.success('Website gate settings saved');
     } catch {
       toast.error('Failed to save website gate settings');
     } finally {
       setSavingGate(false);
+    }
+  };
+
+  const checkWebsiteGateHealth = async () => {
+    setCheckingGateHealth(true);
+    try {
+      const { data } = await api.get('/api/admin/website-gate-health');
+      setGateHealth(data);
+      if (data?.ok) {
+        toast.success('Website gate health check passed');
+      } else {
+        toast.error('Website gate health check found issues');
+      }
+    } catch (error) {
+      const detail = error?.response?.data?.message;
+      toast.error(detail || 'Website gate health check failed');
+      setGateHealth({ status: 'error', ok: false, message: detail || 'Health check request failed' });
+    } finally {
+      setCheckingGateHealth(false);
     }
   };
 
@@ -348,6 +373,30 @@ export default function ApiSettings() {
           />
         </div>
 
+        <div className="url-field" style={{ marginTop: '1rem' }}>
+          <label>Reset free-search limit every (minutes)</label>
+          <input
+            className="url-input"
+            type="number"
+            min="1"
+            value={settings.websiteGateResetWindowMinutes ?? 1440}
+            onChange={(e) => setSettings((s) => ({ ...s, websiteGateResetWindowMinutes: e.target.value }))}
+          />
+          <small style={{ color: 'var(--text-secondary)', marginTop: '0.35rem', display: 'block' }}>
+            Example: 1440 = daily reset. Users get the free {settings.websiteGateFreeQueries ?? 3} searches again after this window.
+          </small>
+        </div>
+
+        <div className="url-field" style={{ marginTop: '1rem' }}>
+          <label>Production probe URL (for health checker)</label>
+          <input
+            className="url-input"
+            value={settings.websiteGateProbeUrl || ''}
+            onChange={(e) => setSettings((s) => ({ ...s, websiteGateProbeUrl: e.target.value }))}
+            placeholder="https://sim-db-frontend.vercel.app"
+          />
+        </div>
+
         <div className="priority-card" style={{ marginTop: '1rem' }}>
           <div className="priority-header">
             <h3><FiArrowUp size={16} style={{ marginRight: 6 }} />Short-link Provider Priority</h3>
@@ -396,6 +445,51 @@ export default function ApiSettings() {
           <button className="btn btn-primary" style={{ maxWidth: 280 }} onClick={saveWebsiteGateConfig} disabled={savingGate}>
             <FiSave size={16} /> {savingGate ? 'Saving gate config...' : 'Save Website Gate Settings'}
           </button>
+        </div>
+
+        <div className="card" style={{ marginTop: '1rem', background: 'var(--card-bg)' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3><FiActivity size={16} style={{ marginRight: 8, verticalAlign: 'middle' }} />Website Gate Health Check</h3>
+            <button className={`btn btn-ghost btn-sm ${checkingGateHealth ? 'spinning' : ''}`} onClick={checkWebsiteGateHealth} disabled={checkingGateHealth}>
+              <FiRefreshCw size={14} /> {checkingGateHealth ? 'Checking...' : 'Run Health Check'}
+            </button>
+          </div>
+
+          {gateHealth ? (
+            <div style={{ fontSize: '0.92rem' }}>
+              <p>
+                Status:{' '}
+                <strong style={{ color: gateHealth.ok ? 'var(--success)' : 'var(--danger)' }}>
+                  {gateHealth.status || (gateHealth.ok ? 'healthy' : 'degraded')}
+                </strong>
+              </p>
+              {gateHealth.probeUrl ? <p>Probe URL: <code>{gateHealth.probeUrl}</code></p> : null}
+              {gateHealth.checkedAt ? <p>Checked at: {new Date(gateHealth.checkedAt).toLocaleString()}</p> : null}
+              {gateHealth.message ? <p style={{ color: 'var(--danger)' }}>{gateHealth.message}</p> : null}
+
+              {Array.isArray(gateHealth.steps) && gateHealth.steps.length ? (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Probe steps</p>
+                  <div style={{ display: 'grid', gap: '0.4rem' }}>
+                    {gateHealth.steps.map((step) => (
+                      <div key={step.step} style={{ padding: '0.55rem 0.65rem', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.86rem' }}>
+                        <strong>#{step.step}</strong> · status {step.status}
+                        {step.provider ? ` · provider ${String(step.provider).toUpperCase()}` : ''}
+                        {step.requireShortlink ? ' · shortlink required' : ' · no gate'}
+                        {step.redirectUrl ? ' · redirect ok' : ''}
+                        {step.error ? ` · error: ${step.error}` : ''}
+                        {step.message ? ` · message: ${step.message}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)' }}>
+              Run the health check to verify live production short-link behavior before users report issues.
+            </p>
+          )}
         </div>
       </div>
 

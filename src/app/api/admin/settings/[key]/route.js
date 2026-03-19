@@ -47,8 +47,23 @@ function normalizeValue(key, value) {
     return parsed;
   }
 
+  if (key === 'websiteGateResetWindowMinutes') {
+    const parsed = Number.parseInt(String(value ?? ''), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return 1440;
+    return parsed;
+  }
+
   if (key === 'websiteGateProviderRotation') return normalizeProviderRotation(value);
   if (key === 'websiteGateProviderEnabled') return normalizeProviderEnabled(value);
+  if (key === 'websiteGateProbeUrl') {
+    const raw = String(value || '').trim();
+    if (!raw) return 'https://sim-db-frontend.vercel.app';
+    try {
+      return new URL(raw).origin;
+    } catch {
+      return 'https://sim-db-frontend.vercel.app';
+    }
+  }
 
   return value;
 }
@@ -88,6 +103,8 @@ export async function PATCH(request, { params }) {
       'websiteGateProviderEnabled',
       'websiteGateFailoverEnabled',
       'websiteGateUnlockTtlMinutes',
+      'websiteGateResetWindowMinutes',
+      'websiteGateProbeUrl',
     ];
     if (!allowed.includes(key)) {
       return NextResponse.json({ error: 'Invalid setting key' }, { status: 400 });

@@ -25,6 +25,8 @@ const SETTINGS_DEFAULTS = {
   },
   websiteGateFailoverEnabled: true,
   websiteGateUnlockTtlMinutes: 10,
+  websiteGateResetWindowMinutes: 1440,
+  websiteGateProbeUrl: process.env.WEBSITE_GATE_PROBE_URL || 'https://sim-db-frontend.vercel.app',
 };
 
 function normalizePriority(raw) {
@@ -85,10 +87,21 @@ function normalizeWebsiteSetting(key, value) {
       return normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateFreeQueries);
     case 'websiteGateUnlockTtlMinutes':
       return Math.max(1, normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateUnlockTtlMinutes));
+    case 'websiteGateResetWindowMinutes':
+      return Math.max(1, normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateResetWindowMinutes));
     case 'websiteGateProviderRotation':
       return normalizeProviderRotation(value);
     case 'websiteGateProviderEnabled':
       return normalizeProviderEnabled(value);
+    case 'websiteGateProbeUrl': {
+      const raw = String(value || '').trim();
+      if (!raw) return SETTINGS_DEFAULTS.websiteGateProbeUrl;
+      try {
+        return new URL(raw).origin;
+      } catch {
+        return SETTINGS_DEFAULTS.websiteGateProbeUrl;
+      }
+    }
     default:
       return value;
   }
@@ -102,7 +115,9 @@ function normalizeByKey(key, value) {
     key === 'websiteGateProviderRotation' ||
     key === 'websiteGateProviderEnabled' ||
     key === 'websiteGateFailoverEnabled' ||
-    key === 'websiteGateUnlockTtlMinutes'
+    key === 'websiteGateUnlockTtlMinutes' ||
+    key === 'websiteGateResetWindowMinutes' ||
+    key === 'websiteGateProbeUrl'
   ) {
     return normalizeWebsiteSetting(key, value);
   }

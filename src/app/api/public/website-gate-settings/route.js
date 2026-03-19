@@ -16,6 +16,7 @@ const DEFAULTS = {
   },
   websiteGateFailoverEnabled: true,
   websiteGateUnlockTtlMinutes: 10,
+  websiteGateResetWindowMinutes: 1440,
 };
 
 function normalizeProviderRotation(raw) {
@@ -65,6 +66,8 @@ export async function GET() {
         payload[key] = normalizeNonNegativeInt(candidate, DEFAULTS.websiteGateFreeQueries);
       } else if (key === 'websiteGateUnlockTtlMinutes') {
         payload[key] = Math.max(1, normalizeNonNegativeInt(candidate, DEFAULTS.websiteGateUnlockTtlMinutes));
+      } else if (key === 'websiteGateResetWindowMinutes') {
+        payload[key] = Math.max(1, normalizeNonNegativeInt(candidate, DEFAULTS.websiteGateResetWindowMinutes));
       } else if (key === 'websiteGateProviderRotation') {
         payload[key] = normalizeProviderRotation(candidate);
       } else if (key === 'websiteGateProviderEnabled') {
@@ -88,6 +91,7 @@ export async function GET() {
         websiteGateProviderEnabled: DEFAULTS.websiteGateProviderEnabled,
         websiteGateFailoverEnabled: DEFAULTS.websiteGateFailoverEnabled,
         websiteGateUnlockTtlMinutes: DEFAULTS.websiteGateUnlockTtlMinutes,
+        websiteGateResetWindowMinutes: DEFAULTS.websiteGateResetWindowMinutes,
       },
       {
         headers: {

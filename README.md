@@ -41,6 +41,8 @@ Admin panel source for SIM Finder backend.
 	- `API2_URL`
 	- `API_TIMEOUT`
 	- `CACHE_TTL`
+	- `WEBSITE_GATE_PROBE_URL` (optional; default: `https://sim-db-frontend.vercel.app`) used by Dashboard → API Settings → Website Gate Health Check
+	- `WEBSITE_GATE_RESET_WINDOW_MINUTES` (optional fallback; default: `1440`) for free-search quota reset timing
 	- `CORS_ALLOWED_ORIGINS` (comma-separated; e.g. `http://localhost:5050`)
 4. Deploy.
 
