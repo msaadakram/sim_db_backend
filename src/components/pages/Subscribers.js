@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api';
 import toast from 'react-hot-toast';
+import { FiDownload, FiMail, FiRefreshCw, FiSearch, FiUsers } from 'react-icons/fi';
 
 export default function Subscribers() {
   const [subscribers, setSubscribers] = useState([]);
@@ -74,96 +75,123 @@ export default function Subscribers() {
   };
 
   return (
-    <div className="card">
-      <div className="card-header" style={{ alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <h3>Newsletter Subscribers ({total.toLocaleString()} total)</h3>
-        <button className="btn btn-sm" onClick={exportCsv} disabled={exporting}>
-          {exporting ? 'Exporting...' : 'Export CSV'}
-        </button>
+    <div className="subscribers-page">
+      <div className="subscribers-hero card">
+        <div className="subscribers-hero-left">
+          <div className="subscribers-hero-icon">
+            <FiUsers size={20} />
+          </div>
+          <div>
+            <h3>Newsletter Subscribers</h3>
+            <p>Manage and export emails collected from the blog subscription form.</p>
+          </div>
+        </div>
+
+        <div className="subscribers-kpis">
+          <div className="subscribers-kpi-pill">
+            <FiMail size={14} />
+            <span>{total.toLocaleString()} total</span>
+          </div>
+          <button className="btn btn-sm subscribers-export-btn" onClick={exportCsv} disabled={exporting}>
+            {exporting ? <FiRefreshCw className="spin" /> : <FiDownload />}
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={submitSearch} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search email..."
-          style={{ flex: 1 }}
-        />
-        <button className="btn btn-sm" type="submit">
-          Search
-        </button>
-        <button
-          className="btn btn-sm"
-          type="button"
-          onClick={() => {
-            setSearchInput('');
-            setSearch('');
-            setPage(1);
-          }}
-        >
-          Reset
-        </button>
-      </form>
-
-      {loading ? (
-        <div className="spinner" />
-      ) : subscribers.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)', padding: '1rem 0' }}>No subscribers found.</p>
-      ) : (
-        <>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Source</th>
-                  <th>Created</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subscribers.map((subscriber) => (
-                  <tr key={subscriber._id}>
-                    <td style={{ fontFamily: 'monospace' }}>{subscriber.email}</td>
-                    <td>{subscriber.source || '-'}</td>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                      {formatDate(subscriber.createdAt)}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
-                      {formatDate(subscriber.updatedAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="card">
+        <form onSubmit={submitSearch} className="subscribers-toolbar">
+          <div className="subscribers-search-wrap">
+            <FiSearch size={16} />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by email..."
+            />
           </div>
+          <div className="subscribers-toolbar-actions">
+            <button className="btn btn-sm" type="submit">
+              Search
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+                setPage(1);
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </form>
 
-          {pages > 1 && (
-            <div className="pagination">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Prev
-              </button>
-              {Array.from({ length: Math.min(pages, 7) }, (_, i) => {
-                const start = Math.max(1, page - 3);
-                const num = start + i;
-                if (num > pages) return null;
-                return (
-                  <button
-                    key={num}
-                    className={num === page ? 'active' : ''}
-                    onClick={() => setPage(num)}
-                  >
-                    {num}
-                  </button>
-                );
-              })}
-              <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </button>
+        {loading ? (
+          <div className="spinner" />
+        ) : subscribers.length === 0 ? (
+          <div className="subscribers-empty-state">
+            <FiMail size={28} />
+            <p>No subscribers found.</p>
+          </div>
+        ) : (
+          <>
+            <div className="table-wrapper subscribers-table-wrap">
+              <table className="subscribers-table">
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Source</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscribers.map((subscriber) => (
+                    <tr key={subscriber._id}>
+                      <td>
+                        <span className="subscribers-email-cell">{subscriber.email}</span>
+                      </td>
+                      <td>
+                        <span className="badge badge-info subscribers-source-badge">
+                          {subscriber.source || 'unknown'}
+                        </span>
+                      </td>
+                      <td className="subscribers-time-cell">{formatDate(subscriber.createdAt)}</td>
+                      <td className="subscribers-time-cell">{formatDate(subscriber.updatedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </>
-      )}
+
+            {pages > 1 && (
+              <div className="pagination">
+                <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  Prev
+                </button>
+                {Array.from({ length: Math.min(pages, 7) }, (_, i) => {
+                  const start = Math.max(1, page - 3);
+                  const num = start + i;
+                  if (num > pages) return null;
+                  return (
+                    <button
+                      key={num}
+                      className={num === page ? 'active' : ''}
+                      onClick={() => setPage(num)}
+                    >
+                      {num}
+                    </button>
+                  );
+                })}
+                <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
