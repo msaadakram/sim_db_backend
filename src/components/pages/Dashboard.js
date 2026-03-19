@@ -7,6 +7,7 @@ import {
   FiSettings,
   FiFileText,
   FiKey,
+  FiUsers,
   FiLogOut,
   FiSun,
   FiMoon,
@@ -19,11 +20,13 @@ import ApiSettings from './ApiSettings';
 import Logs from './Logs';
 import ApiKeys from './ApiKeys';
 import ChangePassword from './ChangePassword';
+import Subscribers from './Subscribers';
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Overview', icon: FiHome },
   { path: '/dashboard/settings', label: 'API Settings', icon: FiSettings },
   { path: '/dashboard/logs', label: 'Logs', icon: FiFileText },
+  { path: '/dashboard/subscribers', label: 'Subscribers', icon: FiUsers },
   { path: '/dashboard/keys', label: 'API Keys', icon: FiKey },
   { path: '/dashboard/password', label: 'Change Password', icon: FiLock },
 ];
@@ -84,6 +87,7 @@ export default function Dashboard({ onLogout, theme, toggleTheme }) {
           <Route index element={<Overview />} />
           <Route path="settings" element={<ApiSettings />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="subscribers" element={<Subscribers />} />
           <Route path="keys" element={<ApiKeys />} />
           <Route path="password" element={<ChangePassword />} />
         </Routes>

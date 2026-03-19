@@ -8,6 +8,9 @@ Admin panel source for SIM Finder backend.
 2. Fill in your environment values.
    - Set `MONGODB_DB_NAME=sim-finder-admin` (target DB used by the app/scripts).
    - If your current active data is in another DB (for example `sim-finder`), set `MONGODB_SOURCE_DB_NAME=sim-finder`.
+	- To view newsletter subscribers in admin, set:
+	  - `NEWSLETTER_DB_NAME=sim-finder`
+	  - `NEWSLETTER_COLLECTION=newsletter_subscribers`
 3. Install dependencies and run:
 	- `npm run dev`
 
@@ -18,6 +21,7 @@ Admin panel source for SIM Finder backend.
 	- `npm run migrate:active-db`
 - Then seed required admin defaults:
 	- `npm run seed`
+- Newsletter subscribers can be viewed and exported from Dashboard → Subscribers.
 
 ## Deploy to Vercel
 
