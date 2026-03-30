@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import Setting from '@/lib/models/Setting';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const SHORTLINK_PROVIDERS = ['cuty', 'exe', 'gplinks', 'shrinkearn'];
 
 const DEFAULTS = {
@@ -79,7 +82,9 @@ export async function GET() {
 
     return NextResponse.json(payload, {
       headers: {
-        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
       },
     });
   } catch {
@@ -95,7 +100,9 @@ export async function GET() {
       },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=60',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          Pragma: 'no-cache',
+          Expires: '0',
         },
       }
     );
