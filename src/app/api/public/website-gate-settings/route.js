@@ -51,6 +51,20 @@ function normalizeNonNegativeInt(value, fallback) {
   return parsed;
 }
 
+function parseBoolean(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
 export async function GET() {
   try {
     await dbConnect();
@@ -64,7 +78,7 @@ export async function GET() {
       const candidate = raw === null ? fallback : raw;
 
       if (key === 'websiteGateEnabled' || key === 'websiteGateFailoverEnabled') {
-        payload[key] = Boolean(candidate);
+        payload[key] = parseBoolean(candidate, fallback);
       } else if (key === 'websiteGateFreeQueries') {
         payload[key] = normalizeNonNegativeInt(candidate, DEFAULTS.websiteGateFreeQueries);
       } else if (key === 'websiteGateUnlockTtlMinutes') {

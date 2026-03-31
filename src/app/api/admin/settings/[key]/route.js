@@ -25,16 +25,31 @@ function normalizeProviderEnabled(raw) {
 
   for (const provider of SHORTLINK_PROVIDERS) {
     if (raw[provider] !== undefined) {
-      defaults[provider] = Boolean(raw[provider]);
+      defaults[provider] = parseBoolean(raw[provider], defaults[provider]);
     }
   }
 
   return defaults;
 }
 
+function parseBoolean(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
 function normalizeValue(key, value) {
   if (key === 'apiPriority') return normalizePriority(value);
-  if (key === 'websiteGateEnabled' || key === 'websiteGateFailoverEnabled') return Boolean(value);
+  if (key === 'websiteGateEnabled') return parseBoolean(value, true);
+  if (key === 'websiteGateFailoverEnabled') return parseBoolean(value, true);
 
   if (key === 'websiteGateFreeQueries') {
     const parsed = Number.parseInt(String(value ?? ''), 10);

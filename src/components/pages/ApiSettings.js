@@ -17,6 +17,20 @@ const WEBSITE_PROVIDER_REGISTRY = {
   shrinkearn: { label: 'ShrinkEarn', domain: 'shrinkearn.com' },
 };
 
+function toBoolean(value, fallback = false) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
 export default function ApiSettings() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,21 +45,21 @@ export default function ApiSettings() {
   const fetchSettings = useCallback(async () => {
     try {
       const { data } = await api.get('/api/admin/settings');
+      const providerEnabled = data.websiteGateProviderEnabled || {};
       setSettings({
         ...data,
-        websiteGateEnabled: data.websiteGateEnabled ?? true,
+        websiteGateEnabled: toBoolean(data.websiteGateEnabled, true),
         websiteGateFreeQueries: data.websiteGateFreeQueries ?? 3,
-        websiteGateFailoverEnabled: data.websiteGateFailoverEnabled ?? true,
+        websiteGateFailoverEnabled: toBoolean(data.websiteGateFailoverEnabled, true),
         websiteGateUnlockTtlMinutes: data.websiteGateUnlockTtlMinutes ?? 10,
         websiteGateResetWindowMinutes: data.websiteGateResetWindowMinutes ?? 1440,
         websiteGateProbeUrl: data.websiteGateProbeUrl ?? 'https://sim-db-frontend.vercel.app',
         websiteGateProviderRotation: data.websiteGateProviderRotation || Object.keys(WEBSITE_PROVIDER_REGISTRY),
         websiteGateProviderEnabled: {
-          cuty: true,
-          exe: true,
-          gplinks: true,
-          shrinkearn: true,
-          ...(data.websiteGateProviderEnabled || {}),
+          cuty: toBoolean(providerEnabled.cuty, true),
+          exe: toBoolean(providerEnabled.exe, true),
+          gplinks: toBoolean(providerEnabled.gplinks, true),
+          shrinkearn: toBoolean(providerEnabled.shrinkearn, true),
         },
       });
     } catch {
@@ -152,7 +166,7 @@ export default function ApiSettings() {
 
   const toggleWebsiteProvider = async (provider) => {
     const prev = settings.websiteGateProviderEnabled || {};
-    const next = { ...prev, [provider]: !prev[provider] };
+    const next = { ...prev, [provider]: !toBoolean(prev[provider], true) };
     setSettings((s) => ({ ...s, websiteGateProviderEnabled: next }));
     setTogglingKey(`provider-${provider}`);
     try {
@@ -170,9 +184,9 @@ export default function ApiSettings() {
     setSavingGate(true);
     try {
       await api.put('/api/admin/settings', {
-        websiteGateEnabled: Boolean(settings.websiteGateEnabled),
+        websiteGateEnabled: toBoolean(settings.websiteGateEnabled, true),
         websiteGateFreeQueries: Number.parseInt(String(settings.websiteGateFreeQueries || 0), 10),
-        websiteGateFailoverEnabled: Boolean(settings.websiteGateFailoverEnabled),
+        websiteGateFailoverEnabled: toBoolean(settings.websiteGateFailoverEnabled, true),
         websiteGateUnlockTtlMinutes: Number.parseInt(String(settings.websiteGateUnlockTtlMinutes || 10), 10),
         websiteGateResetWindowMinutes: Number.parseInt(String(settings.websiteGateResetWindowMinutes || 1440), 10),
         websiteGateProbeUrl: String(settings.websiteGateProbeUrl || '').trim(),
@@ -327,7 +341,7 @@ export default function ApiSettings() {
             <div className="api-card-footer">
               <span className="api-card-toggle-label">{settings.websiteGateEnabled ? 'Enabled' : 'Disabled'}</span>
               <label className="toggle">
-                <input type="checkbox" checked={Boolean(settings.websiteGateEnabled)} onChange={() => setSettings((s) => ({ ...s, websiteGateEnabled: !s.websiteGateEnabled }))} />
+                <input type="checkbox" checked={toBoolean(settings.websiteGateEnabled, true)} onChange={() => setSettings((s) => ({ ...s, websiteGateEnabled: !toBoolean(s.websiteGateEnabled, true) }))} />
                 <span className="slider" />
               </label>
             </div>
@@ -344,7 +358,7 @@ export default function ApiSettings() {
             <div className="api-card-footer">
               <span className="api-card-toggle-label">{settings.websiteGateFailoverEnabled ? 'Enabled' : 'Disabled'}</span>
               <label className="toggle">
-                <input type="checkbox" checked={Boolean(settings.websiteGateFailoverEnabled)} onChange={() => setSettings((s) => ({ ...s, websiteGateFailoverEnabled: !s.websiteGateFailoverEnabled }))} />
+                <input type="checkbox" checked={toBoolean(settings.websiteGateFailoverEnabled, true)} onChange={() => setSettings((s) => ({ ...s, websiteGateFailoverEnabled: !toBoolean(s.websiteGateFailoverEnabled, true) }))} />
                 <span className="slider" />
               </label>
             </div>
@@ -405,7 +419,7 @@ export default function ApiSettings() {
           <div className="priority-list">
             {websiteProviderOrder.map((provider, idx) => {
               const meta = WEBSITE_PROVIDER_REGISTRY[provider];
-              const enabled = Boolean(settings.websiteGateProviderEnabled?.[provider]);
+              const enabled = toBoolean(settings.websiteGateProviderEnabled?.[provider], true);
               const isFirst = idx === 0;
               const isLast = idx === websiteProviderOrder.length - 1;
               return (

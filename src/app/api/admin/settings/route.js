@@ -65,7 +65,7 @@ function normalizeProviderEnabled(raw) {
 
   for (const provider of SHORTLINK_PROVIDERS) {
     if (raw[provider] !== undefined) {
-      base[provider] = Boolean(raw[provider]);
+      base[provider] = parseBoolean(raw[provider], base[provider]);
     }
   }
 
@@ -78,11 +78,26 @@ function normalizeNonNegativeInt(value, fallback) {
   return parsed;
 }
 
+function parseBoolean(value, fallback) {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+
+  return fallback;
+}
+
 function normalizeWebsiteSetting(key, value) {
   switch (key) {
     case 'websiteGateEnabled':
+      return parseBoolean(value, SETTINGS_DEFAULTS.websiteGateEnabled);
     case 'websiteGateFailoverEnabled':
-      return Boolean(value);
+      return parseBoolean(value, SETTINGS_DEFAULTS.websiteGateFailoverEnabled);
     case 'websiteGateFreeQueries':
       return normalizeNonNegativeInt(value, SETTINGS_DEFAULTS.websiteGateFreeQueries);
     case 'websiteGateUnlockTtlMinutes':
